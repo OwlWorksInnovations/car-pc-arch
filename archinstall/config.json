@@ -9,29 +9,7 @@
     "device_modifications": [
       {
         "device": "__DISK__",
-        "wipe": true,
-        "partitions": [
-          {
-            "btrfs": [],
-            "flags": ["Boot", "ESP"],
-            "fs_type": "fat32",
-            "mountpoint": "/boot",
-            "size": { "unit": "MiB", "value": 512 },
-            "start": { "unit": "MiB", "value": 1 },
-            "status": "create",
-            "type": "primary"
-          },
-          {
-            "btrfs": [],
-            "flags": [],
-            "fs_type": "ext4",
-            "mountpoint": "/",
-            "size": { "unit": "Percent", "value": 100 },
-            "start": { "unit": "MiB", "value": 513 },
-            "status": "create",
-            "type": "primary"
-          }
-        ]
+        "wipe": true
       }
     ]
   },
