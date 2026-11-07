@@ -1,1 +1,23 @@
-archinstall --silent --config <(echo '{"config_type": "default_layout", "device_modifications": [{"device": "/dev/sda", "wipe": true}], "profile": {"main": "Minimal"}, "bootloader": "Systemd-boot", "audio": "pipewire", "kernels": ["linux"], "locale_config": {"kb_layout": "us", "sys_enc": "UTF-8", "sys_lang": "en_US"}, "timezone": "Africa/Johannesburg"}')
+cat << 'EOF' > /tmp/arch-config.json
+{
+  "config_type": "default_layout",
+  "device_modifications": [
+    {
+      "device": "/dev/vda",
+      "wipe": true
+    }
+  ],
+  "profile": {
+    "main": "Minimal"
+  },
+  "bootloader": "Systemd-boot",
+  "audio": "pipewire",
+  "kernels": ["linux"],
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_enc": "UTF-8",
+    "sys_lang": "en_US"
+  },
+  "timezone": "Africa/Johannesburg"
+}
+EOF
