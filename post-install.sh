@@ -20,8 +20,8 @@ else
     usermod -aG wheel,video,input "$USER_NAME"
 fi
 
-echo "===> Installing desktop icon manager (pcmanfm) and taskbar (tint2)..."
-pacman -S --noconfirm --needed pcmanfm tint2
+echo "===> Installing desktop icon manager (pcmanfm), taskbar (tint2), and xdotool..."
+pacman -S --noconfirm --needed pcmanfm tint2 xdotool
 
 echo "===> Installing Organic Maps via Flatpak (if online)..."
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
@@ -44,6 +44,7 @@ EOF
 
 echo "===> Writing clean 1-line .xinitrc..."
 printf "exec openbox-session\n" > "$USER_HOME/.xinitrc"
+printf "exec openbox-session\n" > /root/.xinitrc
 
 echo "===> Configuring Openbox autostart (desktop icons + taskbar)..."
 mkdir -p "$USER_HOME/.config/openbox"
@@ -68,29 +69,41 @@ with open("$USER_HOME/.config/openbox/rc.xml", "w") as f:
     f.write(xml)
 EOF
 
-echo "===> Configuring large car-friendly tint2 taskbar..."
+echo "===> Configuring crash-free car-friendly tint2 taskbar (rounded = 0)..."
 mkdir -p "$USER_HOME/.config/tint2"
 cat << 'EOF' > "$USER_HOME/.config/tint2/tint2rc"
-# Panel geometry (48px tall at bottom for easy clicking/tapping)
+# Panel geometry
 panel_items = LTSC
 panel_size = 100% 48
 panel_margin = 0 0
-panel_padding = 6 4 6
+panel_padding = 4 2 4
 panel_position = bottom center horizontal
 panel_layer = top
 strut_policy = follow_size
 
-# Background
+# Background 0 (Panel)
 rounded = 0
 border_width = 0
 background_color = #181818 100
 
-# Launcher (Show Desktop button to return to icons anytime)
+# Background 1 (Active task)
+rounded = 0
+border_width = 1
+background_color = #2E7D32 100
+border_color = #66BB6A 100
+
+# Background 2 (Inactive task)
+rounded = 0
+border_width = 1
+background_color = #2B2B2B 100
+border_color = #444444 100
+
+# Launcher (Show Desktop)
 launcher_padding = 6 4 6
 launcher_icon_size = 32
 launcher_item_app = /usr/local/share/applications/show-desktop.desktop
 
-# Taskbar buttons (full-width tabs for switching open apps)
+# Taskbar
 taskbar_mode = single_desktop
 taskbar_padding = 4 2 6
 taskbar_background_id = 0
@@ -102,18 +115,6 @@ task_font_color = #EEEEEE 100
 task_active_background_id = 1
 task_background_id = 2
 
-# Active task highlight
-rounded = 6
-border_width = 1
-background_color = #2E7D32 100
-border_color = #66BB6A 100
-
-# Inactive task background
-rounded = 6
-border_width = 1
-background_color = #2B2B2B 100
-border_color = #444444 100
-
 # Clock
 time1_format = %H:%M
 time1_font = Sans Bold 13
@@ -121,7 +122,7 @@ clock_font_color = #FFFFFF 100
 clock_padding = 10 0
 EOF
 
-# Create a "Show Desktop" taskbar button so you can always get back to your icons
+# Create "Show Desktop" taskbar button
 mkdir -p /usr/local/share/applications
 cat << 'EOF' > /usr/local/share/applications/show-desktop.desktop
 [Desktop Entry]
@@ -131,9 +132,15 @@ Exec=xdotool key super+d
 Icon=user-desktop
 Terminal=false
 EOF
-pacman -S --noconfirm --needed xdotool
 
-echo "===> Creating clickable Desktop shortcuts..."
+echo "===> Setting xterm as PCManFM default terminal..."
+mkdir -p "$USER_HOME/.config/libfm"
+cat << 'EOF' > "$USER_HOME/.config/libfm/libfm.conf"
+[config]
+terminal=xterm
+EOF
+
+echo "===> Creating clickable Desktop shortcuts (Music, Maps, Terminal)..."
 mkdir -p "$USER_HOME/Desktop"
 
 cat << 'EOF' > "$USER_HOME/Desktop/Music.desktop"
@@ -151,6 +158,15 @@ Type=Application
 Name=Navigation Maps
 Exec=flatpak run app.organicmaps.desktop
 Icon=app.organicmaps.desktop
+Terminal=false
+EOF
+
+cat << 'EOF' > "$USER_HOME/Desktop/Terminal.desktop"
+[Desktop Entry]
+Type=Application
+Name=Terminal
+Exec=xterm -fa 'DejaVu Sans Mono' -fs 14
+Icon=utilities-terminal
 Terminal=false
 EOF
 
