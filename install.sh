@@ -2,10 +2,32 @@
 set -e
 
 # ==========================================
-# 1. DISK FORMATTING & PARTITIONING
+# 0. PRE-FLIGHT CHECKS & DISK SELECTION
 # ==========================================
 
-DISK="/dev/vda"
+if [[ ! -d /sys/firmware/efi/efivars ]]; then
+    echo "ERROR: Installer was not booted in UEFI mode!"
+    exit 1
+fi
+
+echo "Available disks on this system:"
+lsblk -dpno NAME,SIZE,MODEL,TYPE | grep disk
+
+read -rp "Enter the target disk to install on (e.g. /dev/sda or /dev/vda): " DISK
+
+if [[ ! -b "$DISK" ]]; then
+    echo "ERROR: Disk $DISK does not exist!"
+    exit 1
+fi
+
+lsblk "$DISK"
+read -rp "WARNING: THIS WILL ENTIRELY ERASE $DISK. Continue? (yes/no): " CONFIRM
+[[ "$CONFIRM" == "yes" ]] || { echo "Installation aborted."; exit 1; }
+
+
+# ==========================================
+# 1. DISK FORMATTING & PARTITIONING
+# ==========================================
 
 echo "===> Unmounting any existing mounts..."
 umount -R /mnt 2>/dev/null || true
@@ -41,9 +63,9 @@ mount -o uid=0,gid=0,fmask=0077,dmask=0077 "$EFI_PART" /mnt/boot
 # ==========================================
 
 echo "===> Installing base system and packages..."
-pacstrap /mnt base linux linux-firmware \
+pacstrap /mnt base linux linux-firmware base-devel git nano \
     xorg-server xorg-xinit openbox alsa-utils ttf-dejavu xterm flatpak audacious mpv jack2 \
-    networkmanager sudo grub efibootmgr
+    networkmanager grub efibootmgr
 
 echo "===> Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
@@ -64,13 +86,8 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 echo "car-pc" > /etc/hostname
 
-# Install standard GRUB for UEFI
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck
-
-# Acer ES1 Firmware Fallback Fix: Copy grubx64.efi to standard BOOTX64.EFI
-mkdir -p /boot/EFI/BOOT
-cp /boot/EFI/GRUB/grubx64.efi /boot/EFI/BOOT/BOOTX64.EFI
-
+# Install GRUB with --removable to automatically write to EFI/BOOT/BOOTX64.EFI for stubborn firmware
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --removable --recheck
 grub-mkconfig -o /boot/grub/grub.cfg
 
 systemctl enable NetworkManager
@@ -78,4 +95,4 @@ systemctl enable NetworkManager
 echo "root:changeme" | chpasswd
 EOF
 
-echo "===> Installation complete! Fallback boot binary created for stubborn UEFI firmware."
+echo "===> Installation complete! Unmount and reboot into your system."
