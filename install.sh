@@ -2,7 +2,7 @@
 set -e
 
 # ==========================================
-# 1. DISK FORMATTING & PARTITIONING (DO FIRST)
+# 1. DISK FORMATTING & PARTITIONING
 # ==========================================
 
 DISK="/dev/vda"
@@ -37,7 +37,7 @@ mount -o uid=0,gid=0,fmask=0077,dmask=0077 "$EFI_PART" /mnt/boot
 
 
 # ==========================================
-# 2. SYSTEM INSTALLATION (DO AFTER FORMATTING)
+# 2. SYSTEM INSTALLATION & PACKSTRAP
 # ==========================================
 
 echo "===> Installing base system and packages..."
@@ -64,8 +64,8 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 echo "car-pc" > /etc/hostname
 
-# Install GRUB for UEFI
-grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck
+# Install GRUB for UEFI with universal fallback support
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --removable --recheck
 grub-mkconfig -o /boot/grub/grub.cfg
 
 systemctl enable NetworkManager
