@@ -7,3 +7,4 @@ A fully automated, repository-backed deployment setup for an offline DIY car inf
 2. Clone or transfer this repository.
 3. Make the script executable: `chmod +x install.sh`
 4. Run the installer: `./install.sh`
+5. Reboot `reboot 0`
