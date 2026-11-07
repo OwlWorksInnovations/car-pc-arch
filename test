@@ -1,17 +1,21 @@
 cat << 'EOF' > /tmp/arch-config.json
 {
-  "config_type": "default_layout",
-  "device_modifications": [
-    {
-      "device": "/dev/sda",
-      "wipe": true
-    }
-  ],
+  "disk_config": {
+    "config_type": "default_layout",
+    "device_modifications": [
+      {
+        "device": "/dev/sda",
+        "wipe": true
+      }
+    ]
+  },
   "profile": {
     "main": "Minimal"
   },
   "bootloader": "Systemd-boot",
-  "audio": "pipewire",
+  "audio_config": {
+    "audio": "pipewire"
+  },
   "kernels": ["linux"],
   "locale_config": {
     "kb_layout": "us",
