@@ -1,58 +1,86 @@
 #!/bin/bash
 set -e
 
-if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run this script as root."
-  exit 1
-fi
+# ==========================================
+# 1. DISK FORMATTING & PARTITIONING (DO FIRST)
+# ==========================================
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DISK="/dev/vda"
 
-echo "[+] Synchronizing package databases and updating system..."
-pacman -Syu --noconfirm
+echo "===> Unmounting any existing mounts..."
+umount -R /mnt 2>/dev/null || true
 
-echo "[+] Installing Xorg, Openbox, ALSA, fonts, terminal, and media packages..."
-pacman -S --noconfirm xorg-server xorg-xinit openbox alsa-utils ttf-dejavu xterm flatpak audacious mpv jack2
+echo "===> Wiping partition table on $DISK..."
+wipefs -a "$DISK"
+sgdisk --zap-all "$DISK"
 
-echo "[+] Setting up Flathub remote..."
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+echo "===> Creating new GPT partition table (EFI + Root)..."
+sgdisk -n 1:0:+512M -t 1:ef00 "$DISK"
+sgdisk -n 2:0:0 -t 2:8300 "$DISK"
 
-echo "[+] Installing Organic Maps via Flatpak..."
-flatpak install -y flathub app.organicmaps.desktop
-
-echo "[+] Configuring user xinitrc..."
-echo "exec openbox-session" > ~/.xinitrc
-
-echo "[+] Configuring systemd auto-login on tty1..."
-mkdir -p /etc/systemd/system/getty@tty1.service.d
-if [ -f "$SCRIPT_DIR/configs/autologin.conf" ]; then
-  cp "$SCRIPT_DIR/configs/autologin.conf" /etc/systemd/system/getty@tty1.service.d/autologin.conf
+if [[ "$DISK" =~ nvme ]]; then
+    EFI_PART="${DISK}p1"
+    ROOT_PART="${DISK}p2"
 else
-  cat << 'EOF' > /etc/systemd/system/getty@tty1.service.d/autologin.conf
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty -o '-p -f -- \u' --noclear --autologin root %I $TERM
-EOF
-fi
-systemctl daemon-reload
-
-echo "[+] Configuring bash profile to auto-start X on login..."
-grep -q "startx" ~/.bash_profile || echo '[[ -z $DISPLAY && $XDG_VTNR -eq 1 ]] && exec startx' >> ~/.bash_profile
-
-echo "[+] Configuring Openbox autostart script..."
-mkdir -p ~/.config/openbox
-if [ -f "$SCRIPT_DIR/configs/autostart" ]; then
-  cp "$SCRIPT_DIR/configs/autostart" ~/.config/openbox/autostart
-else
-  cat << 'EOF' > ~/.config/openbox/autostart
-# Disable screen blanking and power saving so the dashboard stays awake
-xset s off -dpms &
-
-# Launch offline navigation
-flatpak run app.organicmaps.desktop &
-EOF
+    EFI_PART="${DISK}1"
+    ROOT_PART="${DISK}2"
 fi
 
-echo "[+] Setup complete! Rebooting system..."
-sleep 2
-reboot
+echo "===> Formatting partitions..."
+mkfs.fat -F32 "$EFI_PART"
+mkfs.ext4 -F "$ROOT_PART"
+
+echo "===> Mounting filesystems to /mnt..."
+mount "$ROOT_PART" /mnt
+mkdir -p /mnt/boot
+mount "$EFI_PART" /mnt/boot
+
+
+# ==========================================
+# 2. SYSTEM INSTALLATION (DO AFTER FORMATTING)
+# ==========================================
+
+echo "===> Installing base system and packages..."
+pacstrap /mnt base linux linux-firmware \
+    xorg-server xorg-xinit openbox alsa-utils ttf-dejavu xterm flatpak audacious mpv jack2 \
+    networkmanager sudo
+
+echo "===> Generating fstab..."
+genfstab -U /mnt >> /mnt/etc/fstab
+
+
+# ==========================================
+# 3. CHROOT CONFIGURATION
+# ==========================================
+
+echo "===> Configuring system inside chroot..."
+arch-chroot /mnt /bin/bash <<EOF
+ln -sf /usr/share/zoneinfo/Africa/Johannesburg /etc/localtime
+hwclock --systohc
+
+echo "en_US.UTF-8 UTF-8" >> /etc/locale.gen
+locale-gen
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
+
+echo "car-pc" > /etc/hostname
+
+bootctl install
+
+cat <<EOT > /boot/loader/entries/arch.conf
+title   Arch Linux
+linux   /vmlinuz-linux
+initrd  /initramfs-linux.img
+options root=${ROOT_PART} rw
+EOT
+
+cat <<EOT > /boot/loader/loader.conf
+default arch.conf
+timeout 3
+EOT
+
+systemctl enable NetworkManager
+
+echo "root:changeme" | chpasswd
+EOF
+
+echo "===> Installation complete!"
