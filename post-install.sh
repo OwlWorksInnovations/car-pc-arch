@@ -309,7 +309,7 @@ echo "Music: Audacious"
 echo "Audio Settings: pavucontrol"
 echo "USB: UDisks2 + GVFS automount"
 echo "Policy: Polkit authentication agent"
-echo "GPS: Removed"
+echo "Enjoy it - Juan"
 echo
 echo "Reboot with: reboot"
 echo "=========================================="
