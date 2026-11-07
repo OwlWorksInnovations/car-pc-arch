@@ -19,14 +19,20 @@ echo "===> Enabling NetworkManager and Bluetooth..."
 systemctl enable --now NetworkManager
 systemctl enable --now bluetooth
 
-echo "===> Installing desktop, network, Bluetooth and audio packages..."
+echo "===> Installing desktop, network, Bluetooth, audio and USB packages..."
 
 pacman -S --noconfirm --needed \
     pcmanfm tint2 xdotool openbox xterm \
     network-manager-applet bluez bluez-utils blueman \
     flatpak audacious alsa-utils \
     pipewire pipewire-audio pipewire-pulse wireplumber \
-    pavucontrol
+    pavucontrol \
+    udisks2 gvfs gvfs-mtp \
+    polkit polkit-gnome
+
+echo "===> Enabling USB automount service..."
+
+systemctl enable --now udisks2
 
 echo "===> Creating user..."
 
@@ -108,15 +114,21 @@ with open(path, "w") as f:
 EOF
 
 cat << 'EOF' > "$USER_HOME/.config/openbox/autostart"
+# Desktop and panel
 pcmanfm --desktop &
 tint2 &
+
+# Network and Bluetooth
 nm-applet &
 blueman-applet &
+
+# Authentication agent for removable devices
+/usr/lib/polkit-gnome/polkit-gnome-authentication-agent-1 &
+
 EOF
 
 echo "===> Configuring PipeWire audio..."
 
-# Enable audio services for all user sessions.
 systemctl --global enable \
     pipewire.socket \
     pipewire-pulse.socket \
@@ -196,6 +208,17 @@ mkdir -p "$USER_HOME/.config/libfm"
 cat << 'EOF' > "$USER_HOME/.config/libfm/libfm.conf"
 [config]
 terminal=xterm
+EOF
+
+echo "===> Configuring removable-media support..."
+
+mkdir -p "$USER_HOME/.config/pcmanfm/default"
+
+cat << 'EOF' > "$USER_HOME/.config/pcmanfm/default/pcmanfm.conf"
+[volume]
+mount_on_startup=1
+mount_removable=1
+autorun=0
 EOF
 
 echo "===> Creating desktop shortcuts..."
@@ -284,6 +307,8 @@ echo "Bluetooth Audio: A2DP receiving"
 echo "Output: AUX / Analog audio"
 echo "Music: Audacious"
 echo "Audio Settings: pavucontrol"
+echo "USB: UDisks2 + GVFS automount"
+echo "Policy: Polkit authentication agent"
 echo "GPS: Removed"
 echo
 echo "Reboot with: reboot"
