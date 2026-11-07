@@ -30,10 +30,10 @@ echo "===> Formatting partitions..."
 mkfs.fat -F32 "$EFI_PART"
 mkfs.ext4 -F "$ROOT_PART"
 
-echo "===> Mounting filesystems to /mnt..."
+echo "===> Mounting filesystems to /mnt with secure umask..."
 mount "$ROOT_PART" /mnt
 mkdir -p /mnt/boot
-mount "$EFI_PART" /mnt/boot
+mount -o uid=0,gid=0,fmask=0077,dmask=0077 "$EFI_PART" /mnt/boot
 
 
 # ==========================================
@@ -43,14 +43,14 @@ mount "$EFI_PART" /mnt/boot
 echo "===> Installing base system and packages..."
 pacstrap /mnt base linux linux-firmware \
     xorg-server xorg-xinit openbox alsa-utils ttf-dejavu xterm flatpak audacious mpv jack2 \
-    networkmanager sudo
+    networkmanager sudo grub efibootmgr
 
 echo "===> Generating fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 
 
 # ==========================================
-# 3. CHROOT CONFIGURATION
+# 3. CHROOT CONFIGURATION & GRUB SETUP
 # ==========================================
 
 echo "===> Configuring system inside chroot..."
@@ -64,23 +64,13 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 echo "car-pc" > /etc/hostname
 
-bootctl install
-
-cat <<EOT > /boot/loader/entries/arch.conf
-title   Arch Linux
-linux   /vmlinuz-linux
-initrd  /initramfs-linux.img
-options root=${ROOT_PART} rw
-EOT
-
-cat <<EOT > /boot/loader/loader.conf
-default arch.conf
-timeout 3
-EOT
+# Install GRUB for UEFI
+grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --recheck
+grub-mkconfig -o /boot/grub/grub.cfg
 
 systemctl enable NetworkManager
 
 echo "root:changeme" | chpasswd
 EOF
 
-echo "===> Installation complete!"
+echo "===> Installation complete! You can now unmount and reboot."
