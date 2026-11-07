@@ -11,11 +11,10 @@ USER_HOME="/home/$USER_NAME"
 
 echo "===> Enabling NetworkManager and Bluetooth..."
 systemctl enable --now NetworkManager
-
-echo "===> Installing desktop manager, taskbar, network/bluetooth GUIs, and GPS tools..."
-pacman -S --noconfirm --needed pcmanfm tint2 xdotool network-manager-applet bluez bluez-utils blueman gpsd geoclue openbsd-netcat
-
 systemctl enable --now bluetooth
+
+echo "===> Installing desktop manager, taskbar, network/bluetooth GUIs, socat, and GPS tools..."
+pacman -S --noconfirm --needed pcmanfm tint2 xdotool network-manager-applet bluez bluez-utils blueman gpsd geoclue openbsd-netcat socat
 
 if ! id "$USER_NAME" >/dev/null 2>&1; then
     echo "===> Creating user '$USER_NAME'..."
@@ -76,7 +75,6 @@ EOF
 echo "===> Configuring crash-free tint2 taskbar with system tray..."
 mkdir -p "$USER_HOME/.config/tint2"
 cat << 'EOF' > "$USER_HOME/.config/tint2/tint2rc"
-# Panel geometry (include S for Systray)
 panel_items = LTS
 panel_size = 100% 48
 panel_margin = 0 0
@@ -85,29 +83,24 @@ panel_position = bottom center horizontal
 panel_layer = top
 strut_policy = follow_size
 
-# Background 0 (Panel)
 rounded = 0
 border_width = 0
 background_color = #181818 100
 
-# Background 1 (Active task)
 rounded = 0
 border_width = 1
 background_color = #2E7D32 100
 border_color = #66BB6A 100
 
-# Background 2 (Inactive task)
 rounded = 0
 border_width = 1
 background_color = #2B2B2B 100
 border_color = #444444 100
 
-# Launcher (Show Desktop)
 launcher_padding = 6 4 6
 launcher_icon_size = 32
 launcher_item_app = /usr/local/share/applications/show-desktop.desktop
 
-# Taskbar
 taskbar_mode = single_desktop
 taskbar_padding = 4 2 6
 taskbar_background_id = 0
@@ -119,21 +112,18 @@ task_font_color = #EEEEEE 100
 task_active_background_id = 1
 task_background_id = 2
 
-# Systray
 systray_padding = 4 4 4
 systray_background_id = 0
 systray_sort = ascending
 systray_icon_size = 24
 systray_icon_asb = 100 0 0
 
-# Clock
 time1_format = %H:%M
 time1_font = Sans Bold 13
 clock_font_color = #FFFFFF 100
 clock_padding = 10 0
 EOF
 
-# Create "Show Desktop" taskbar button
 mkdir -p /usr/local/share/applications
 cat << 'EOF' > /usr/local/share/applications/show-desktop.desktop
 [Desktop Entry]
@@ -153,6 +143,25 @@ GPSD_OPTIONS="-n"
 EOF
 systemctl enable --now gpsd
 systemctl enable --now geoclue
+
+echo "===> Creating automatic Bluetooth GPS background service (socat)..."
+cat << 'EOF' > /etc/systemd/system/bt-gps-bridge.service
+[Unit]
+Description=Bluetooth GPS NMEA Bridge to /dev/rfcomm0
+After=bluetooth.service network.target
+Wants=bluetooth.service
+
+[Service]
+ExecStart=/usr/bin/socat -u PTY,link=/dev/rfcomm0,group=dialout,mode=666 RFCOMM:F0:39:65:39:F0:46,1
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable bt-gps-bridge.service
 
 echo "===> Setting xterm as PCManFM default terminal..."
 mkdir -p "$USER_HOME/.config/libfm"
@@ -215,4 +224,4 @@ chown -R "$USER_NAME:$USER_NAME" "$USER_HOME"
 echo "===> Saving ALSA state..."
 alsactl store 2>/dev/null || true
 
-echo "===> Done! Reboot ('sudo reboot') to boot straight into the updated car UI."
+echo "===> Done! Reboot ('sudo reboot') to boot straight into the updated car UI with automatic GPS bridging."
