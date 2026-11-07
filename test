@@ -1,33 +1,23 @@
 cat << EOF > /tmp/archinstall-config.json
 {
-  "disk_config": {
-    "config_type": "default_layout",
-    "device_modifications": [
-      {
-        "device": "$TARGET_DISK",
-        "wipe": true
-      }
-    ]
-  },
-  "bootloader_config": {
-    "bootloader": "Systemd-boot",
-    "removable": true,
-    "uki": false
-  },
-  "profiles": [
-    {
-      "path": "minimal"
-    }
-  ],
-  "audio_config": {
-    "audio": "pipewire"
-  },
+  "bootloader": "Systemd-boot",
+  "audio": "pipewire",
   "kernels": ["linux"],
   "locale_config": {
     "kb_layout": "us",
     "sys_enc": "UTF-8",
     "sys_lang": "en_US"
   },
-  "timezone": "Africa/Johannesburg"
+  "timezone": "Africa/Johannesburg",
+  "disk_layouts": [
+    {
+      "device": "/dev/vda",
+      "format": true,
+      "wipe": "to-be-sure"
+    }
+  ],
+  "profile": {
+    "main": "Minimal"
+  }
 }
 EOF
