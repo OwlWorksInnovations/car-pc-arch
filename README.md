@@ -17,6 +17,11 @@ Fully automated, deployment scripts for an offline DIY car infotainment/navigati
 I use aux to my, already installed, car radio which handles the speakers. It is 100% possible to use a Raspberry PI or PI PICO to handle the speakers but this was the easiest solution for me. I haven't tested touch screen yet but I want to order a screen. You might need to make your bluetooth discoverable but in my case it was automatically done; I just go on my phone and connect to bluetooth and play music.
 
 ## NOTE
-Cars can get **HOT**, and the high temperatures inside a parked vehicle can cause your laptop to overheat. Using a traditional HDD is also highly discouraged, as constant vibrations can accelerate wear and potentially cause data corruption.
 
-An SSD is the recommended option. If you don't have one, a USB flash drive is an alternative, although it comes with its own reliability risks. Fortunately, reinstalling the system is easy with the provided scripts.
+Cars can get **HOT**, and high temperatures inside a parked vehicle can cause your laptop to overheat.
+
+Using a traditional HDD is also highly discouraged. Constant vibrations can accelerate mechanical wear and potentially cause data corruption.
+
+An SSD is the recommended option. However, if you don't have one, a USB flash drive is a reasonable alternative. It has no moving parts, making it more resistant to vehicle vibrations than an HDD. Keep in mind that flash drives have limited write endurance and aren't all designed for continuous use.
+
+Fortunately, reinstalling the system is easy with the provided scripts.
