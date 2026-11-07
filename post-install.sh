@@ -19,13 +19,17 @@ echo "===> Enabling NetworkManager and Bluetooth..."
 systemctl enable --now NetworkManager
 systemctl enable --now bluetooth
 
-echo "===> Installing desktop, network and Bluetooth packages..."
+echo "===> Installing desktop, network, Bluetooth and audio packages..."
+
 pacman -S --noconfirm --needed \
     pcmanfm tint2 xdotool openbox xterm \
     network-manager-applet bluez bluez-utils blueman \
-    flatpak audacious alsa-utils
+    flatpak audacious alsa-utils \
+    pipewire pipewire-audio pipewire-pulse wireplumber \
+    pavucontrol
 
 echo "===> Creating user..."
+
 if ! id "$USER_NAME" >/dev/null 2>&1; then
     useradd -m -G wheel,video,input,lp -s /bin/bash "$USER_NAME"
 else
@@ -33,10 +37,12 @@ else
 fi
 
 mkdir -p /etc/sudoers.d
+
 echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 chmod 440 /etc/sudoers.d/wheel
 
 echo "===> Installing Organic Maps..."
+
 flatpak remote-add --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo || true
 
@@ -44,8 +50,10 @@ flatpak install -y flathub app.organicmaps.desktop || \
     echo "WARNING: Organic Maps installation failed."
 
 echo "===> Removing old GPS configuration..."
+
 systemctl disable --now bt-gps-bridge.service 2>/dev/null || true
 systemctl disable --now gpsd.service 2>/dev/null || true
+systemctl disable --now geoclue.service 2>/dev/null || true
 
 rm -f /etc/systemd/system/bt-gps-bridge.service
 rm -f /etc/default/gpsd
@@ -54,6 +62,7 @@ systemctl daemon-reload
 systemctl reset-failed
 
 echo "===> Configuring automatic login..."
+
 mkdir -p /etc/systemd/system/getty@tty1.service.d
 
 cat << EOF > /etc/systemd/system/getty@tty1.service.d/autologin.conf
@@ -63,6 +72,7 @@ ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin $USER_NAME %I \$
 EOF
 
 echo "===> Configuring automatic X startup..."
+
 cat << 'EOF' > "$USER_HOME/.bash_profile"
 if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
     exec startx
@@ -73,6 +83,7 @@ printf "exec openbox-session\n" > "$USER_HOME/.xinitrc"
 printf "exec openbox-session\n" > /root/.xinitrc
 
 echo "===> Configuring Openbox..."
+
 mkdir -p "$USER_HOME/.config/openbox"
 
 cp /etc/xdg/openbox/rc.xml \
@@ -103,7 +114,16 @@ nm-applet &
 blueman-applet &
 EOF
 
+echo "===> Configuring PipeWire audio..."
+
+# Enable audio services for all user sessions.
+systemctl --global enable \
+    pipewire.socket \
+    pipewire-pulse.socket \
+    wireplumber.service
+
 echo "===> Configuring Tint2..."
+
 mkdir -p "$USER_HOME/.config/tint2"
 
 cat << 'EOF' > "$USER_HOME/.config/tint2/tint2rc"
@@ -156,7 +176,8 @@ clock_font_color = #FFFFFF 100
 clock_padding = 10 0
 EOF
 
-echo "===> Creating show desktop launcher..."
+echo "===> Creating application launchers..."
+
 mkdir -p /usr/local/share/applications
 
 cat << 'EOF' > /usr/local/share/applications/show-desktop.desktop
@@ -169,6 +190,7 @@ Terminal=false
 EOF
 
 echo "===> Configuring PCManFM terminal..."
+
 mkdir -p "$USER_HOME/.config/libfm"
 
 cat << 'EOF' > "$USER_HOME/.config/libfm/libfm.conf"
@@ -177,6 +199,7 @@ terminal=xterm
 EOF
 
 echo "===> Creating desktop shortcuts..."
+
 mkdir -p "$USER_HOME/Desktop"
 
 cat << 'EOF' > "$USER_HOME/Desktop/Music.desktop"
@@ -224,28 +247,44 @@ Icon=bluetooth
 Terminal=false
 EOF
 
-echo "===> Setting desktop permissions..."
+cat << 'EOF' > "$USER_HOME/Desktop/Audio.desktop"
+[Desktop Entry]
+Type=Application
+Name=Audio Settings
+Exec=pavucontrol
+Icon=audio-volume-high
+Terminal=false
+EOF
+
 chmod +x "$USER_HOME/Desktop/"*.desktop
 
 echo "===> Saving ALSA state..."
+
 alsactl store 2>/dev/null || true
 
 echo "===> Fixing ownership..."
+
 chown -R "$USER_NAME:$USER_NAME" "$USER_HOME"
 
 echo "===> Reloading systemd..."
+
 systemctl daemon-reload
 
 echo
 echo "=========================================="
 echo " CAR UI INSTALLATION COMPLETE!"
 echo "=========================================="
+echo
 echo "User: $USER_NAME"
 echo "Desktop: Openbox + Tint2"
 echo "Network: NetworkManager"
 echo "Bluetooth: BlueZ"
-echo "Maps: Organic Maps"
-echo "GPS bridge: Removed"
+echo "Audio: PipeWire + WirePlumber"
+echo "Bluetooth Audio: A2DP receiving"
+echo "Output: AUX / Analog audio"
+echo "Music: Audacious"
+echo "Audio Settings: pavucontrol"
+echo "GPS: Removed"
 echo
 echo "Reboot with: reboot"
 echo "=========================================="
