@@ -10,6 +10,11 @@ if [[ ! -d /sys/firmware/efi/efivars ]]; then
     exit 1
 fi
 
+if ! ping -c 1 -W 3 archlinux.org >/dev/null 2>&1; then
+    echo "ERROR: No internet connection! Please check your network."
+    exit 1
+fi
+
 echo "Available disks on this system:"
 lsblk -dpno NAME,SIZE,MODEL,TYPE | grep disk
 
@@ -17,6 +22,11 @@ read -rp "Enter the target disk to install on (e.g. /dev/sda or /dev/vda): " DIS
 
 if [[ ! -b "$DISK" ]]; then
     echo "ERROR: Disk $DISK does not exist!"
+    exit 1
+fi
+
+if [[ "$(lsblk -dn -o TYPE "$DISK")" != "disk" ]]; then
+    echo "ERROR: Please select an entire disk, not a partition!"
     exit 1
 fi
 
@@ -86,7 +96,7 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 echo "car-pc" > /etc/hostname
 
-# Install GRUB with --removable to automatically write to EFI/BOOT/BOOTX64.EFI for stubborn firmware
+# Install GRUB with --removable for reliable fallback handling on older/stubborn UEFI firmware
 grub-install --target=x86_64-efi --efi-directory=/boot --bootloader-id=GRUB --removable --recheck
 grub-mkconfig -o /boot/grub/grub.cfg
 
@@ -95,4 +105,12 @@ systemctl enable NetworkManager
 echo "root:changeme" | chpasswd
 EOF
 
-echo "===> Installation complete! Unmount and reboot into your system."
+
+# ==========================================
+# 4. CLEANUP & EXIT
+# ==========================================
+
+echo "===> Installation complete!"
+umount -R /mnt
+echo "===> Filesystems unmounted successfully."
+echo "You can now safely remove your installation USB and reboot."
