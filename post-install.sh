@@ -16,11 +16,11 @@ echo "===> Enabling NetworkManager and Bluetooth..."
 systemctl enable --now NetworkManager
 systemctl enable --now bluetooth
 
-echo "===> Installing desktop, network, Bluetooth and GPS packages..."
+echo "===> Installing desktop, Bluetooth and GPS packages..."
 pacman -S --noconfirm --needed \
     pcmanfm tint2 xdotool openbox xterm \
     network-manager-applet bluez bluez-utils blueman \
-    gpsd geoclue openbsd-netcat socat \
+    gpsd geoclue openbsd-netcat \
     alsa-utils flatpak audacious
 
 echo "===> Creating user..."
@@ -166,25 +166,23 @@ EOF
 systemctl enable gpsd
 systemctl enable geoclue
 
-echo "===> Creating Bluetooth GPS bridge..."
+echo "===> Creating native Bluetooth GPS bridge..."
+
 cat << EOF > /etc/systemd/system/bt-gps-bridge.service
 [Unit]
-Description=Bluetooth GPS NMEA Bridge
+Description=Bluetooth GPS RFCOMM Connection
 After=bluetooth.service
 Wants=bluetooth.service
 
 [Service]
 Type=simple
-ExecStart=/usr/bin/socat -u PTY,link=/dev/rfcomm0,group=uucp,mode=666 RFCOMM:${GPS_MAC},${GPS_CHANNEL}
+ExecStart=/usr/bin/rfcomm connect /dev/rfcomm0 ${GPS_MAC} ${GPS_CHANNEL}
 Restart=always
 RestartSec=5
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-systemctl daemon-reload
-systemctl enable bt-gps-bridge.service
 
 echo "===> Configuring PCManFM terminal..."
 mkdir -p "$USER_HOME/.config/libfm"
