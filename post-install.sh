@@ -20,8 +20,8 @@ else
     usermod -aG wheel,video,input "$USER_NAME"
 fi
 
-echo "===> Installing desktop icon manager (pcmanfm), taskbar (tint2), and xdotool..."
-pacman -S --noconfirm --needed pcmanfm tint2 xdotool
+echo "===> Installing desktop manager, taskbar, network GUI, and utils..."
+pacman -S --noconfirm --needed pcmanfm tint2 xdotool network-manager-applet gpsd geoclue
 
 echo "===> Installing Organic Maps via Flatpak (if online)..."
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
@@ -46,11 +46,12 @@ echo "===> Writing clean 1-line .xinitrc..."
 printf "exec openbox-session\n" > "$USER_HOME/.xinitrc"
 printf "exec openbox-session\n" > /root/.xinitrc
 
-echo "===> Configuring Openbox autostart (desktop icons + taskbar)..."
+echo "===> Configuring Openbox autostart (desktop icons, taskbar, tray applet)..."
 mkdir -p "$USER_HOME/.config/openbox"
 cat << 'EOF' > "$USER_HOME/.config/openbox/autostart"
 pcmanfm --desktop &
 tint2 &
+nm-applet &
 EOF
 
 echo "===> Configuring Openbox to maximize ALL windows by default..."
@@ -69,11 +70,11 @@ with open("$USER_HOME/.config/openbox/rc.xml", "w") as f:
     f.write(xml)
 EOF
 
-echo "===> Configuring crash-free car-friendly tint2 taskbar (rounded = 0)..."
+echo "===> Configuring crash-free tint2 taskbar with system tray..."
 mkdir -p "$USER_HOME/.config/tint2"
 cat << 'EOF' > "$USER_HOME/.config/tint2/tint2rc"
-# Panel geometry
-panel_items = LTSC
+# Panel geometry (include S for Systray)
+panel_items = LTS
 panel_size = 100% 48
 panel_margin = 0 0
 panel_padding = 4 2 4
@@ -115,6 +116,13 @@ task_font_color = #EEEEEE 100
 task_active_background_id = 1
 task_background_id = 2
 
+# Systray
+systray_padding = 4 4 4
+systray_background_id = 0
+systray_sort = ascending
+systray_icon_size = 24
+systray_icon_asb = 100 0 0
+
 # Clock
 time1_format = %H:%M
 time1_font = Sans Bold 13
@@ -140,7 +148,7 @@ cat << 'EOF' > "$USER_HOME/.config/libfm/libfm.conf"
 terminal=xterm
 EOF
 
-echo "===> Creating clickable Desktop shortcuts (Music, Maps, Terminal)..."
+echo "===> Creating clickable Desktop shortcuts..."
 mkdir -p "$USER_HOME/Desktop"
 
 cat << 'EOF' > "$USER_HOME/Desktop/Music.desktop"
@@ -170,10 +178,19 @@ Icon=utilities-terminal
 Terminal=false
 EOF
 
+cat << 'EOF' > "$USER_HOME/Desktop/Network.desktop"
+[Desktop Entry]
+Type=Application
+Name=Network Settings
+Exec=nm-connection-editor
+Icon=network-wireless
+Terminal=false
+EOF
+
 chmod +x "$USER_HOME/Desktop/"*.desktop
 chown -R "$USER_NAME:$USER_NAME" "$USER_HOME"
 
 echo "===> Saving ALSA state..."
 alsactl store 2>/dev/null || true
 
-echo "===> Done! Reboot ('sudo reboot') to boot straight into the maximized car UI."
+echo "===> Done! Reboot ('sudo reboot') to test your fully equipped car UI."
