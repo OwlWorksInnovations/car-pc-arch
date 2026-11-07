@@ -10,30 +10,37 @@ fi
 echo "===> Enabling and starting NetworkManager..."
 systemctl enable --now NetworkManager
 
-echo "===> Setting up user Openbox configuration for 'caruser'..."
-USER_HOME="/home/caruser"
+USER_NAME="caruser"
+USER_HOME="/home/$USER_NAME"
 
-if [[ -d "$USER_HOME" ]]; then
-    sudo -u caruser mkdir -p "$USER_HOME/.config/openbox"
-    
-    # Write a clean autostart file that launches your media player instead of random xterms
-    cat << 'EOF' > "$USER_HOME/.config/openbox/autostart"
+# Create user if it doesn't exist yet
+if ! id "$USER_NAME" >/dev/null 2>&1; then
+    echo "===> Creating user '$USER_NAME'..."
+    useradd -m -G wheel -s /bin/bash "$USER_NAME"
+    echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
+    echo "NOTE: Set a password for $USER_NAME later with 'sudo passwd $USER_NAME'"
+fi
+
+echo "===> Configuring .xinitrc for Openbox..."
+cp /etc/X11/xinit/xinitrc "$USER_HOME/.xinitrc"
+# Strip the default twm, xclock, and 3x xterm fallback lines at the bottom
+sed -i '/twm &/,$d' "$USER_HOME/.xinitrc"
+echo "exec openbox-session" >> "$USER_HOME/.xinitrc"
+
+echo "===> Setting up Openbox autostart configuration..."
+mkdir -p "$USER_HOME/.config/openbox"
+cat << 'EOF' > "$USER_HOME/.config/openbox/autostart"
 # Clean Openbox autostart configuration for Car PC
 # Add background apps here, ending with an ampersand (&)
 
-# Example: Launch audacious or mpv automatically on startup
+# Example: Launch audacious automatically on startup
 # audacious &
 EOF
 
-    chown -R caruser:caruser "$USER_HOME/.config"
-    echo "===> Openbox autostart configured at $USER_HOME/.config/openbox/autostart"
-else
-    echo "WARNING: /home/caruser directory not found. Skipping user autostart setup."
-fi
+chown -R "$USER_NAME:$USER_NAME" "$USER_HOME/.xinitrc" "$USER_HOME/.config"
 
 echo "===> Configuring ALSA audio settings..."
-# Unmute master and PCM channels and store state
-alsactl store 2>/dev/null || echo "ALSA state card not fully initialized yet; run alsamixer manually later."
+alsactl store 2>/dev/null || echo "ALSA state card not initialized yet; run alsamixer manually later."
 
 echo "===> Post-installation setup complete!"
-echo "You can now log into your user account and run 'startx' to launch Openbox."
+echo "Switch to $USER_NAME (su - $USER_NAME) and run 'startx' to launch Openbox."
