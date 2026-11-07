@@ -1,82 +1,121 @@
-#!/bin/bash
-set -e
+#!/usr/bin/env bash
+set -euo pipefail
 
-if [ "$EUID" -ne 0 ]; then
-  echo "[-] Please run this script as root from the Arch Live ISO."
-  exit 1
+# Usage: bash install.sh /dev/vda
+DISK="${1:?Usage: bash install.sh /dev/DISK}"
+
+[[ $EUID -eq 0 ]] || { echo "Run as root"; exit 1; }
+[[ -b "$DISK" ]] || { echo "Invalid disk"; exit 1; }
+[[ -d /sys/firmware/efi ]] || { echo "UEFI required"; exit 1; }
+
+echo "WARNING: EVERYTHING ON $DISK WILL BE ERASED!"
+lsblk "$DISK"
+read -rp "Type ERASE to continue: " CONFIRM
+[[ "$CONFIRM" == "ERASE" ]] || exit 1
+
+read -rp "Hostname [carpc]: " HOSTNAME
+HOSTNAME="${HOSTNAME:-carpc}"
+
+read -rp "Username: " USERNAME
+read -rsp "Password: " PASSWORD
+echo
+
+# Determine partition naming
+if [[ "$DISK" =~ [0-9]$ ]]; then
+    EFI="${DISK}p1"
+    ROOT="${DISK}p2"
+else
+    EFI="${DISK}1"
+    ROOT="${DISK}2"
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Partition disk
+wipefs -af "$DISK"
+sgdisk --zap-all "$DISK"
 
-echo "=========================================="
-echo "   Car PC - Unattended Arch Installer     "
-echo "=========================================="
-echo ""
-echo "[+] Scanning available storage devices..."
-echo ""
+sgdisk \
+    -n 1:0:+512M -t 1:ef00 \
+    -n 2:0:0     -t 2:8300 \
+    "$DISK"
 
-# List physical disks (excluding loop, rom, ram)
-mapfile -t DISKS < <(lsblk -dpno NAME,SIZE,MODEL | grep -E '^/dev/(sd|nvme|vd|mmcblk)')
+partprobe "$DISK"
+udevadm settle
+sleep 2
 
-if [ ${#DISKS[@]} -eq 0 ]; then
-  echo "[-] No suitable storage devices found!"
-  exit 1
-fi
+# Format
+mkfs.fat -F32 "$EFI"
+mkfs.ext4 -F "$ROOT"
 
-for i in "${!DISKS[@]}"; do
-  printf "  [%d] %s\n" "$((i+1))" "${DISKS[$i]}"
-done
+# Mount
+mount "$ROOT" /mnt
+mkdir -p /mnt/boot
+mount "$EFI" /mnt/boot
 
-echo ""
-while true; do
-  read -rp "Select target drive number [1-${#DISKS[@]}]: " CHOICE
-  if [[ "$CHOICE" =~ ^[0-9]+$ ]] && [ "$CHOICE" -ge 1 ] && [ "$CHOICE" -le "${#DISKS[@]}" ]; then
-    SELECTED_LINE="${DISKS[$((CHOICE-1))]}"
-    TARGET_DISK=$(echo "$SELECTED_LINE" | awk '{print $1}')
-    break
-  else
-    echo "[-] Invalid selection. Enter a number between 1 and ${#DISKS[@]}."
-  fi
-done
+# Install packages
+pacstrap -K /mnt \
+    base linux linux-firmware intel-ucode \
+    sudo networkmanager \
+    pipewire pipewire-alsa pipewire-pulse wireplumber
 
-echo ""
-echo "[!] WARNING: ALL DATA ON $TARGET_DISK ($SELECTED_LINE) WILL BE WIPED!"
-read -rp "Type 'yes' to confirm: " CONFIRM
-if [ "$CONFIRM" != "yes" ]; then
-  echo "[-] Installation aborted."
-  exit 1
-fi
+# Generate fstab
+genfstab -U /mnt >> /mnt/etc/fstab
 
-echo ""
-while true; do
-  read -rsp "Enter root password for the new system: " ROOT_PASS
-  echo ""
-  read -rsp "Confirm root password: " ROOT_PASS_CONFIRM
-  echo ""
-  if [ -n "$ROOT_PASS" ] && [ "$ROOT_PASS" == "$ROOT_PASS_CONFIRM" ]; then
-    break
-  else
-    echo "[-] Passwords do not match or are empty. Try again."
-  fi
-done
+# Basic configuration
+arch-chroot /mnt ln -sf \
+    /usr/share/zoneinfo/Africa/Johannesburg /etc/localtime
 
-TMP_CONFIG="/tmp/car-pc-config.json"
-TMP_CREDS="/tmp/car-pc-creds.json"
+arch-chroot /mnt hwclock --systohc
 
-# Inject selected disk into config.json
-sed "s|__DISK__|$TARGET_DISK|g" "$SCRIPT_DIR/config.json" > "$TMP_CONFIG"
+sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' \
+    /mnt/etc/locale.gen
 
-# Safely serialize root password into JSON via python3
-python3 -c '
-import json, sys
-creds = {"root-enc-password": None, "!root-password": sys.argv[1]}
-with open(sys.argv[2], "w") as f:
-    json.dump(creds, f, indent=2)
-' "$ROOT_PASS" "$TMP_CREDS"
+arch-chroot /mnt locale-gen
 
-echo ""
-echo "[+] Starting archinstall on $TARGET_DISK..."
-archinstall --config "$TMP_CONFIG" --creds "$TMP_CREDS" --silent
+echo "LANG=en_US.UTF-8" > /mnt/etc/locale.conf
+echo "KEYMAP=us" > /mnt/etc/vconsole.conf
+echo "$HOSTNAME" > /mnt/etc/hostname
 
-rm -f "$TMP_CONFIG" "$TMP_CREDS"
-echo "[+] Base OS installation complete! You can now reboot into your new system and run install.sh."
+cat > /mnt/etc/hosts <<EOF
+127.0.0.1 localhost
+::1 localhost
+127.0.1.1 $HOSTNAME.localdomain $HOSTNAME
+EOF
+
+# User and passwords
+arch-chroot /mnt useradd -m -G wheel -s /bin/bash "$USERNAME"
+
+sed -i 's/^# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/' \
+    /mnt/etc/sudoers
+
+printf 'root:%s\n' "$PASSWORD" | arch-chroot /mnt chpasswd
+printf '%s:%s\n' "$USERNAME" "$PASSWORD" | arch-chroot /mnt chpasswd
+unset PASSWORD
+
+# Enable networking
+arch-chroot /mnt systemctl enable NetworkManager
+
+# Install systemd-boot
+arch-chroot /mnt bootctl --esp-path=/boot install
+
+ROOT_UUID=$(blkid -s UUID -o value "$ROOT")
+
+mkdir -p /mnt/boot/loader/entries
+
+cat > /mnt/boot/loader/loader.conf <<EOF
+default arch.conf
+timeout 3
+editor no
+EOF
+
+cat > /mnt/boot/loader/entries/arch.conf <<EOF
+title Arch Linux
+linux /vmlinuz-linux
+initrd /intel-ucode.img
+initrd /initramfs-linux.img
+options root=UUID=$ROOT_UUID rw
+EOF
+
+arch-chroot /mnt mkinitcpio -P
+
+echo "Installation complete!"
+echo "Remove installation media and reboot."
