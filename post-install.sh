@@ -9,19 +9,21 @@ fi
 USER_NAME="caruser"
 USER_HOME="/home/$USER_NAME"
 
-echo "===> Enabling NetworkManager..."
+echo "===> Enabling NetworkManager and Bluetooth..."
 systemctl enable --now NetworkManager
+
+echo "===> Installing desktop manager, taskbar, network/bluetooth GUIs, and GPS tools..."
+pacman -S --noconfirm --needed pcmanfm tint2 xdotool network-manager-applet bluez bluez-utils blueman gpsd geoclue openbsd-netcat
+
+systemctl enable --now bluetooth
 
 if ! id "$USER_NAME" >/dev/null 2>&1; then
     echo "===> Creating user '$USER_NAME'..."
-    useradd -m -G wheel,video,input -s /bin/bash "$USER_NAME"
+    useradd -m -G wheel,video,input,lp -s /bin/bash "$USER_NAME"
     echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
 else
-    usermod -aG wheel,video,input "$USER_NAME"
+    usermod -aG wheel,video,input,lp "$USER_NAME"
 fi
-
-echo "===> Installing desktop manager, taskbar, network GUI, and utils..."
-pacman -S --noconfirm --needed pcmanfm tint2 xdotool network-manager-applet gpsd geoclue
 
 echo "===> Installing Organic Maps via Flatpak (if online)..."
 flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
@@ -46,12 +48,13 @@ echo "===> Writing clean 1-line .xinitrc..."
 printf "exec openbox-session\n" > "$USER_HOME/.xinitrc"
 printf "exec openbox-session\n" > /root/.xinitrc
 
-echo "===> Configuring Openbox autostart (desktop icons, taskbar, tray applet)..."
+echo "===> Configuring Openbox autostart (desktop icons, taskbar, network & bluetooth applets)..."
 mkdir -p "$USER_HOME/.config/openbox"
 cat << 'EOF' > "$USER_HOME/.config/openbox/autostart"
 pcmanfm --desktop &
 tint2 &
 nm-applet &
+blueman-applet &
 EOF
 
 echo "===> Configuring Openbox to maximize ALL windows by default..."
@@ -141,6 +144,16 @@ Icon=user-desktop
 Terminal=false
 EOF
 
+echo "===> Configuring gpsd to read from Bluetooth serial port (/dev/rfcomm0)..."
+cat << 'EOF' > /etc/default/gpsd
+START_DAEMON="true"
+USBAUTO="false"
+DEVICES="/dev/rfcomm0"
+GPSD_OPTIONS="-n"
+EOF
+systemctl enable --now gpsd
+systemctl enable --now geoclue
+
 echo "===> Setting xterm as PCManFM default terminal..."
 mkdir -p "$USER_HOME/.config/libfm"
 cat << 'EOF' > "$USER_HOME/.config/libfm/libfm.conf"
@@ -187,10 +200,19 @@ Icon=network-wireless
 Terminal=false
 EOF
 
+cat << 'EOF' > "$USER_HOME/Desktop/Bluetooth.desktop"
+[Desktop Entry]
+Type=Application
+Name=Bluetooth
+Exec=blueman-manager
+Icon=bluetooth
+Terminal=false
+EOF
+
 chmod +x "$USER_HOME/Desktop/"*.desktop
 chown -R "$USER_NAME:$USER_NAME" "$USER_HOME"
 
 echo "===> Saving ALSA state..."
 alsactl store 2>/dev/null || true
 
-echo "===> Done! Reboot ('sudo reboot') to test your fully equipped car UI."
+echo "===> Done! Reboot ('sudo reboot') to boot straight into the updated car UI."
