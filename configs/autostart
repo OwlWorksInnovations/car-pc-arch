@@ -1,0 +1,5 @@
+# Disable screen blanking and power saving so the dashboard stays awake
+xset s off -dpms &
+
+# Launch offline navigation
+flatpak run app.organicmaps.desktop &
