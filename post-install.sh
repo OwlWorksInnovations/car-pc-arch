@@ -1,65 +1,74 @@
+
 #!/bin/bash
 set -e
 
 if [[ $EUID -ne 0 ]]; then
-   echo "ERROR: Run this script with sudo or as root."
-   exit 1
+    echo "ERROR: Run this script with sudo or as root."
+    exit 1
 fi
 
 USER_NAME="caruser"
 USER_HOME="/home/$USER_NAME"
+GPS_MAC="F0:39:65:39:F0:46"
+GPS_CHANNEL="1"
 
 echo "===> Enabling NetworkManager and Bluetooth..."
 systemctl enable --now NetworkManager
 systemctl enable --now bluetooth
 
-echo "===> Installing desktop manager, taskbar, network/bluetooth GUIs, socat, and GPS tools..."
-pacman -S --noconfirm --needed pcmanfm tint2 xdotool network-manager-applet bluez bluez-utils blueman gpsd geoclue openbsd-netcat socat
+echo "===> Installing desktop, network, Bluetooth and GPS packages..."
+pacman -S --noconfirm --needed \
+    pcmanfm tint2 xdotool openbox xterm \
+    network-manager-applet bluez bluez-utils blueman \
+    gpsd geoclue openbsd-netcat socat \
+    alsa-utils flatpak audacious
 
+echo "===> Creating user..."
 if ! id "$USER_NAME" >/dev/null 2>&1; then
-    echo "===> Creating user '$USER_NAME'..."
-    useradd -m -G wheel,video,input,lp -s /bin/bash "$USER_NAME"
-    echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
+    useradd -m -G wheel,video,input,lp,uucp -s /bin/bash "$USER_NAME"
 else
-    usermod -aG wheel,video,input,lp "$USER_NAME"
+    usermod -aG wheel,video,input,lp,uucp "$USER_NAME"
 fi
 
-echo "===> Installing Organic Maps via Flatpak (if online)..."
-flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo || true
-flatpak install -y flathub app.organicmaps.desktop || echo "WARNING: Could not install Organic Maps (check internet connection)."
+mkdir -p /etc/sudoers.d
+echo "%wheel ALL=(ALL:ALL) ALL" > /etc/sudoers.d/wheel
+chmod 440 /etc/sudoers.d/wheel
 
-echo "===> Configuring automatic login on TTY1 for '$USER_NAME'..."
+echo "===> Installing Organic Maps..."
+flatpak remote-add --if-not-exists flathub \
+    https://dl.flathub.org/repo/flathub.flatpakrepo || true
+flatpak install -y flathub app.organicmaps.desktop || \
+    echo "WARNING: Organic Maps installation failed."
+
+echo "===> Configuring automatic login..."
 mkdir -p /etc/systemd/system/getty@tty1.service.d
+
 cat << EOF > /etc/systemd/system/getty@tty1.service.d/autologin.conf
 [Service]
 ExecStart=
 ExecStart=-/sbin/agetty -o '-p -f -- \\u' --noclear --autologin $USER_NAME %I \$TERM
 EOF
 
-echo "===> Configuring auto-startx on TTY1 login..."
+echo "===> Configuring automatic X startup..."
 cat << 'EOF' > "$USER_HOME/.bash_profile"
 if [[ -z $DISPLAY ]] && [[ $(tty) = /dev/tty1 ]]; then
     exec startx
 fi
 EOF
 
-echo "===> Writing clean 1-line .xinitrc..."
 printf "exec openbox-session\n" > "$USER_HOME/.xinitrc"
 printf "exec openbox-session\n" > /root/.xinitrc
 
-echo "===> Configuring Openbox autostart (desktop icons, taskbar, network & bluetooth applets)..."
+echo "===> Configuring Openbox..."
 mkdir -p "$USER_HOME/.config/openbox"
-cat << 'EOF' > "$USER_HOME/.config/openbox/autostart"
-pcmanfm --desktop &
-tint2 &
-nm-applet &
-blueman-applet &
-EOF
 
-echo "===> Configuring Openbox to maximize ALL windows by default..."
-cp /etc/xdg/openbox/rc.xml "$USER_HOME/.config/openbox/rc.xml"
+cp /etc/xdg/openbox/rc.xml \
+    "$USER_HOME/.config/openbox/rc.xml"
+
 python3 - << EOF
-with open("$USER_HOME/.config/openbox/rc.xml", "r") as f:
+path = "$USER_HOME/.config/openbox/rc.xml"
+
+with open(path, "r") as f:
     xml = f.read()
 
 rule = """  <application class="*">
@@ -67,13 +76,23 @@ rule = """  <application class="*">
   </application>
 </applications>"""
 
-xml = xml.replace("</applications>", rule)
-with open("$USER_HOME/.config/openbox/rc.xml", "w") as f:
+if "</applications>" in xml and '<application class="*">' not in xml:
+    xml = xml.replace("</applications>", rule)
+
+with open(path, "w") as f:
     f.write(xml)
 EOF
 
-echo "===> Configuring crash-free tint2 taskbar with system tray..."
+cat << 'EOF' > "$USER_HOME/.config/openbox/autostart"
+pcmanfm --desktop &
+tint2 &
+nm-applet &
+blueman-applet &
+EOF
+
+echo "===> Configuring tint2..."
 mkdir -p "$USER_HOME/.config/tint2"
+
 cat << 'EOF' > "$USER_HOME/.config/tint2/tint2rc"
 panel_items = LTS
 panel_size = 100% 48
@@ -124,7 +143,9 @@ clock_font_color = #FFFFFF 100
 clock_padding = 10 0
 EOF
 
+echo "===> Creating show desktop launcher..."
 mkdir -p /usr/local/share/applications
+
 cat << 'EOF' > /usr/local/share/applications/show-desktop.desktop
 [Desktop Entry]
 Type=Application
@@ -134,25 +155,27 @@ Icon=user-desktop
 Terminal=false
 EOF
 
-echo "===> Configuring gpsd to read from Bluetooth serial port (/dev/rfcomm0)..."
+echo "===> Configuring GPS..."
 cat << 'EOF' > /etc/default/gpsd
 START_DAEMON="true"
 USBAUTO="false"
 DEVICES="/dev/rfcomm0"
 GPSD_OPTIONS="-n"
 EOF
-systemctl enable --now gpsd
-systemctl enable --now geoclue
 
-echo "===> Creating automatic Bluetooth GPS background service (socat)..."
-cat << 'EOF' > /etc/systemd/system/bt-gps-bridge.service
+systemctl enable gpsd
+systemctl enable geoclue
+
+echo "===> Creating Bluetooth GPS bridge..."
+cat << EOF > /etc/systemd/system/bt-gps-bridge.service
 [Unit]
-Description=Bluetooth GPS NMEA Bridge to /dev/rfcomm0
-After=bluetooth.service network.target
+Description=Bluetooth GPS NMEA Bridge
+After=bluetooth.service
 Wants=bluetooth.service
 
 [Service]
-ExecStart=/usr/bin/socat -u PTY,link=/dev/rfcomm0,group=dialout,mode=666 RFCOMM:F0:39:65:39:F0:46,1
+Type=simple
+ExecStart=/usr/bin/socat -u PTY,link=/dev/rfcomm0,group=uucp,mode=666 RFCOMM:${GPS_MAC},${GPS_CHANNEL}
 Restart=always
 RestartSec=5
 
@@ -163,14 +186,15 @@ EOF
 systemctl daemon-reload
 systemctl enable bt-gps-bridge.service
 
-echo "===> Setting xterm as PCManFM default terminal..."
+echo "===> Configuring PCManFM terminal..."
 mkdir -p "$USER_HOME/.config/libfm"
+
 cat << 'EOF' > "$USER_HOME/.config/libfm/libfm.conf"
 [config]
 terminal=xterm
 EOF
 
-echo "===> Creating clickable Desktop shortcuts..."
+echo "===> Creating desktop shortcuts..."
 mkdir -p "$USER_HOME/Desktop"
 
 cat << 'EOF' > "$USER_HOME/Desktop/Music.desktop"
@@ -219,9 +243,25 @@ Terminal=false
 EOF
 
 chmod +x "$USER_HOME/Desktop/"*.desktop
-chown -R "$USER_NAME:$USER_NAME" "$USER_HOME"
 
 echo "===> Saving ALSA state..."
 alsactl store 2>/dev/null || true
 
-echo "===> Done! Reboot ('sudo reboot') to boot straight into the updated car UI with automatic GPS bridging."
+echo "===> Fixing ownership..."
+chown -R "$USER_NAME:$USER_NAME" "$USER_HOME"
+
+echo "===> Reloading systemd..."
+systemctl daemon-reload
+
+echo "===> Enabling GPS bridge..."
+systemctl enable bt-gps-bridge.service
+
+echo
+echo "=========================================="
+echo " Installation completed!"
+echo "=========================================="
+echo "GPS MAC: $GPS_MAC"
+echo "GPS RFCOMM channel: $GPS_CHANNEL"
+echo
+echo "Reboot with: reboot"
+echo "=========================================="
