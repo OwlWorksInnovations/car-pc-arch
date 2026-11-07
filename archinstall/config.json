@@ -1,0 +1,66 @@
+{
+  "archinstall-language": "English",
+  "audio_config": {
+    "audio": "pipewire"
+  },
+  "bootloader": "Systemd-boot",
+  "disk_config": {
+    "config_type": "default_layout",
+    "device_modifications": [
+      {
+        "device": "/dev/vda",
+        "wipe": true,
+        "partitions": [
+          {
+            "btrfs": [],
+            "flags": ["Boot", "ESP"],
+            "fs_type": "fat32",
+            "mountpoint": "/boot",
+            "size": { "unit": "MiB", "value": 512 },
+            "start": { "unit": "MiB", "value": 1 },
+            "status": "create",
+            "type": "primary"
+          },
+          {
+            "btrfs": [],
+            "flags": [],
+            "fs_type": "ext4",
+            "mountpoint": "/",
+            "size": { "unit": "Percent", "value": 100 },
+            "start": { "unit": "MiB", "value": 513 },
+            "status": "create",
+            "type": "primary"
+          }
+        ]
+      }
+    ]
+  },
+  "hostname": "car-pc",
+  "kernels": ["linux"],
+  "locale_config": {
+    "kb_layout": "us",
+    "sys_enc": "UTF-8",
+    "sys_lang": "en_US"
+  },
+  "network_config": {
+    "type": "nm"
+  },
+  "packages": [
+    "xorg-server",
+    "xorg-xinit",
+    "openbox",
+    "alsa-utils",
+    "ttf-dejavu",
+    "xterm",
+    "flatpak",
+    "audacious",
+    "mpv",
+    "jack2"
+  ],
+  "profile_config": {
+    "profile": {
+      "main": "Minimal"
+    }
+  },
+  "timezone": "Africa/Johannesburg"
+}
