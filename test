@@ -1,18 +1,24 @@
-cat << 'EOF' > /tmp/arch-config.json
+cat << EOF > /tmp/archinstall-config.json
 {
   "disk_config": {
     "config_type": "default_layout",
     "device_modifications": [
       {
-        "device": "/dev/sda",
+        "device": "$TARGET_DISK",
         "wipe": true
       }
     ]
   },
-  "profile": {
-    "main": "Minimal"
+  "bootloader_config": {
+    "bootloader": "Systemd-boot",
+    "removable": true,
+    "uki": false
   },
-  "bootloader": "Systemd-boot",
+  "profiles": [
+    {
+      "path": "minimal"
+    }
+  ],
   "audio_config": {
     "audio": "pipewire"
   },
