@@ -6,25 +6,26 @@ Lightweight Arch Linux configuration for a DIY car infotainment and offline navi
 
 ```text
 car-pc-arch/
-├── install.sh              # Automated post-install setup script
+├── install.sh                 # Post-install dashboard setup script
 ├── configs/
-│   ├── autostart           # Openbox autostart script
-│   └── autologin.conf      # Systemd getty@tty1 auto-login override
+│   ├── autostart              # Openbox autostart script
+│   └── autologin.conf         # Systemd getty@tty1 auto-login override
 └── archinstall/
-    ├── config.json         # Unattended archinstall system configuration
-    └── creds.json          # Unattended archinstall root credentials template
+    ├── install-arch.sh        # Interactive disk & password selector for archinstall
+    └── config.json            # Base archinstall system configuration template
 ```
 
 ## Quick Start
 
-### 1. Base OS Installation (Optional)
-Update `/dev/vda` in `archinstall/config.json` to match your target drive (e.g., `/dev/sda` or `/dev/nvme0n1`) and set your password in `archinstall/creds.json`, then run:
+### 1. Base OS Installation (From Arch Live ISO)
+Run the interactive installer script—it will list all available drives (`lsblk`), let you pick the target disk by number, prompt for a root password, and run `archinstall` silently:
 ```bash
-archinstall --config archinstall/config.json --creds archinstall/creds.json --silent
+chmod +x archinstall/install-arch.sh
+./archinstall/install-arch.sh
 ```
 
-### 2. Post-Install Dashboard Setup
-Run directly from your cloned repository or via `curl`:
+### 2. Post-Install Dashboard Setup (After Rebooting)
+Run `install.sh` (or pipe it via `curl` from your GitHub repo) to configure Flatpak, Organic Maps, auto-login, and Openbox autostart:
 ```bash
 chmod +x install.sh
 sudo ./install.sh
