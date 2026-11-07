@@ -2,6 +2,11 @@
 #!/bin/bash
 set -e
 
+# ==========================================
+# CAR INFOTAINMENT INSTALLER
+# Arch Linux + Openbox
+# ==========================================
+
 if [[ $EUID -ne 0 ]]; then
     echo "ERROR: Run this script with sudo or as root."
     exit 1
@@ -9,25 +14,22 @@ fi
 
 USER_NAME="caruser"
 USER_HOME="/home/$USER_NAME"
-GPS_MAC="F0:39:65:39:F0:46"
-GPS_CHANNEL="1"
 
 echo "===> Enabling NetworkManager and Bluetooth..."
 systemctl enable --now NetworkManager
 systemctl enable --now bluetooth
 
-echo "===> Installing desktop, Bluetooth and GPS packages..."
+echo "===> Installing desktop, network and Bluetooth packages..."
 pacman -S --noconfirm --needed \
     pcmanfm tint2 xdotool openbox xterm \
     network-manager-applet bluez bluez-utils blueman \
-    gpsd geoclue openbsd-netcat \
-    alsa-utils flatpak audacious
+    flatpak audacious alsa-utils
 
 echo "===> Creating user..."
 if ! id "$USER_NAME" >/dev/null 2>&1; then
-    useradd -m -G wheel,video,input,lp,uucp -s /bin/bash "$USER_NAME"
+    useradd -m -G wheel,video,input,lp -s /bin/bash "$USER_NAME"
 else
-    usermod -aG wheel,video,input,lp,uucp "$USER_NAME"
+    usermod -aG wheel,video,input,lp "$USER_NAME"
 fi
 
 mkdir -p /etc/sudoers.d
@@ -37,8 +39,19 @@ chmod 440 /etc/sudoers.d/wheel
 echo "===> Installing Organic Maps..."
 flatpak remote-add --if-not-exists flathub \
     https://dl.flathub.org/repo/flathub.flatpakrepo || true
+
 flatpak install -y flathub app.organicmaps.desktop || \
     echo "WARNING: Organic Maps installation failed."
+
+echo "===> Removing old GPS configuration..."
+systemctl disable --now bt-gps-bridge.service 2>/dev/null || true
+systemctl disable --now gpsd.service 2>/dev/null || true
+
+rm -f /etc/systemd/system/bt-gps-bridge.service
+rm -f /etc/default/gpsd
+
+systemctl daemon-reload
+systemctl reset-failed
 
 echo "===> Configuring automatic login..."
 mkdir -p /etc/systemd/system/getty@tty1.service.d
@@ -90,7 +103,7 @@ nm-applet &
 blueman-applet &
 EOF
 
-echo "===> Configuring tint2..."
+echo "===> Configuring Tint2..."
 mkdir -p "$USER_HOME/.config/tint2"
 
 cat << 'EOF' > "$USER_HOME/.config/tint2/tint2rc"
@@ -155,35 +168,6 @@ Icon=user-desktop
 Terminal=false
 EOF
 
-echo "===> Configuring GPS..."
-cat << 'EOF' > /etc/default/gpsd
-START_DAEMON="true"
-USBAUTO="false"
-DEVICES="/dev/rfcomm0"
-GPSD_OPTIONS="-n"
-EOF
-
-systemctl enable gpsd
-systemctl enable geoclue
-
-echo "===> Creating native Bluetooth GPS bridge..."
-
-cat << EOF > /etc/systemd/system/bt-gps-bridge.service
-[Unit]
-Description=Bluetooth GPS RFCOMM Connection
-After=bluetooth.service
-Wants=bluetooth.service
-
-[Service]
-Type=simple
-ExecStart=/usr/bin/rfcomm connect /dev/rfcomm0 ${GPS_MAC} ${GPS_CHANNEL}
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
 echo "===> Configuring PCManFM terminal..."
 mkdir -p "$USER_HOME/.config/libfm"
 
@@ -240,6 +224,7 @@ Icon=bluetooth
 Terminal=false
 EOF
 
+echo "===> Setting desktop permissions..."
 chmod +x "$USER_HOME/Desktop/"*.desktop
 
 echo "===> Saving ALSA state..."
@@ -251,15 +236,16 @@ chown -R "$USER_NAME:$USER_NAME" "$USER_HOME"
 echo "===> Reloading systemd..."
 systemctl daemon-reload
 
-echo "===> Enabling GPS bridge..."
-systemctl enable bt-gps-bridge.service
-
 echo
 echo "=========================================="
-echo " Installation completed!"
+echo " CAR UI INSTALLATION COMPLETE!"
 echo "=========================================="
-echo "GPS MAC: $GPS_MAC"
-echo "GPS RFCOMM channel: $GPS_CHANNEL"
+echo "User: $USER_NAME"
+echo "Desktop: Openbox + Tint2"
+echo "Network: NetworkManager"
+echo "Bluetooth: BlueZ"
+echo "Maps: Organic Maps"
+echo "GPS bridge: Removed"
 echo
 echo "Reboot with: reboot"
 echo "=========================================="
