@@ -3,7 +3,7 @@ cat << 'EOF' > /tmp/arch-config.json
   "config_type": "default_layout",
   "device_modifications": [
     {
-      "device": "/dev/vda",
+      "device": "/dev/sda",
       "wipe": true
     }
   ],
